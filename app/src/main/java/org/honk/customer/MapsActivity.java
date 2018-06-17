@@ -13,6 +13,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import org.honk.customer.domain.SellerLocation;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -27,16 +28,19 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static final String TAG_LOCATIONS = "locations";
     private static final String TAG_LATITUDE = "latitude";
     private static final String TAG_LONGITUDE = "longitude";
+    private static final String TAG_NAME = "name";
+    private static final String TAG_DESCRIPTION = "description";
 
-    private ProgressDialog pDialog;
+    private ProgressDialog progressDialog;
 
-    ArrayList<LatLng> locationsList;
+    ArrayList<SellerLocation> locationsList;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
 
+        // Loading nearby locations from the remote server.
         new LoadLocations().execute();
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
@@ -66,11 +70,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-            pDialog = new ProgressDialog(MapsActivity.this);
-            pDialog.setMessage("Loading locations. Please wait...");
-            pDialog.setIndeterminate(false);
-            pDialog.setCancelable(false);
-            pDialog.show();
+            progressDialog = new ProgressDialog(MapsActivity.this);
+            progressDialog.setMessage("Loading locations. Please wait...");
+            progressDialog.setIndeterminate(false);
+            progressDialog.setCancelable(false);
+            progressDialog.show();
         }
 
         /**
@@ -81,7 +85,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             // getting JSON string from URL
             JSONObject json = JSONParser.makeHttpRequest("https://beced59b-6416-4446-af12-5e35670f307a.mock.pstmn.io/GetNearbyLocations");
 
-            locationsList = new ArrayList<LatLng>();
+            locationsList = new ArrayList<SellerLocation>();
 
             try {
                 // Checking for SUCCESS TAG
@@ -89,19 +93,21 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                 if (success == 1) {
                     // products found
-                    // Getting Array of Products
-                    JSONArray products = json.getJSONArray(TAG_LOCATIONS);
+                    // Getting the array of locations.
+                    JSONArray locations = json.getJSONArray(TAG_LOCATIONS);
 
-                    // looping through All Products
-                    for (int i = 0; i < products.length(); i++) {
-                        JSONObject c = products.getJSONObject(i);
+                    // Looping through all locations.
+                    for (int i = 0; i < locations.length(); i++) {
+                        JSONObject c = locations.getJSONObject(i);
 
-                        // Storing each json item in variable
+                        // Storing each json item in a variable.
                         Double latitude = c.getDouble(TAG_LATITUDE);
                         Double longitude = c.getDouble(TAG_LONGITUDE);
+                        String name = c.getString(TAG_NAME);
+                        String description = c.getString((TAG_DESCRIPTION));
 
                         // adding HashList to ArrayList
-                        locationsList.add(new LatLng(latitude, longitude));
+                        locationsList.add(new SellerLocation(name, description, latitude, longitude));
                     }
                 } else {
                     // no locations found
@@ -122,22 +128,26 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
          * After completing background task Dismiss the progress dialog
          * **/
         protected void onPostExecute(String file_url) {
-            // dismiss the dialog after getting all products
-            pDialog.dismiss();
-            // updating UI from Background rhread
+            // Dismissing the dialog after getting all locations.
+            progressDialog.dismiss();
+            // Updating UI from background thread.
             runOnUiThread(new Runnable() {
                 public void run() {
-                    // Add a marker in Sydney and move the camera
+                    // Add markers to the map and move the camera.
                     if (googleMap != null) {
                         if (locationsList != null) {
-                            for(LatLng location : locationsList) {
-                                googleMap.addMarker(new MarkerOptions().position(location).title("Marker at" + location.latitude + ", " + location.longitude));
+                            for(SellerLocation sellerLocation : locationsList) {
+                                googleMap.addMarker(new MarkerOptions()
+                                        .position(sellerLocation.location)
+                                        .title(sellerLocation.seller.name)
+                                        .snippet(sellerLocation.seller.description));
                             }
                         }
                     }
 
                     LatLng userLocation = new LatLng(45.9711883,12.1673287);
-                    googleMap.moveCamera(CameraUpdateFactory.newLatLng(userLocation));
+                    float maxZoomLevel = googleMap.getMaxZoomLevel();
+                    googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(15f, maxZoomLevel)));
                 }
             });
         }

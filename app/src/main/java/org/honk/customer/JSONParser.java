@@ -19,15 +19,14 @@ import static android.content.ContentValues.TAG;
 
 public class JSONParser {
 
-    // function get json from url
-    // by making HTTP POST or GET method
+    // Gets a JSON object from URL by making a HTTP POST or GET request.
     public static JSONObject makeHttpRequest(String url) {
 
         String response = null;
         try {
             HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setRequestMethod("GET");
-            // read the response
+            // Reading the response.
             InputStream in = new BufferedInputStream(conn.getInputStream());
             response = convertStreamToString(in);
         } catch (MalformedURLException e) {
@@ -40,7 +39,7 @@ public class JSONParser {
             Log.e(TAG, "Exception: " + e.getMessage());
         }
 
-        // try parse the string to a JSON object
+        // Try parsing the string to a JSON object.
         JSONObject jObj = null;
         try {
             jObj = new JSONObject(response);
@@ -48,7 +47,7 @@ public class JSONParser {
             Log.e("JSON Parser", "Error parsing data " + e.toString());
         }
 
-        // return JSON String
+        // Return the JSON string.
         return jObj;
     }
 
