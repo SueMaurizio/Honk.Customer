@@ -64,56 +64,54 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     public class LoadLocations extends AsyncTask<String, String, String> {
+
         /**
-         * Before starting background thread Show Progress Dialog
+         * Before starting background threads, show a progress dialog.
          * */
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
             progressDialog = new ProgressDialog(MapsActivity.this);
-            progressDialog.setMessage("Loading locations. Please wait...");
+            progressDialog.setMessage("");
             progressDialog.setIndeterminate(false);
             progressDialog.setCancelable(false);
             progressDialog.show();
         }
 
         /**
-         * Gets all locations from URL
+         * Gets all locations from URL.
          * */
         protected String doInBackground(String... args) {
 
-            // getting JSON string from URL
             JSONObject json = JSONParser.makeHttpRequest("https://beced59b-6416-4446-af12-5e35670f307a.mock.pstmn.io/GetNearbyLocations");
 
             locationsList = new ArrayList<SellerLocation>();
 
             try {
-                // Checking for SUCCESS TAG
+                // Check for SUCCESS TAG.
                 int success = json.getInt(TAG_SUCCESS);
 
                 if (success == 1) {
-                    // products found
-                    // Getting the array of locations.
+                    // Get the array of locations.
                     JSONArray locations = json.getJSONArray(TAG_LOCATIONS);
 
-                    // Looping through all locations.
+                    // Loop through all locations.
                     for (int i = 0; i < locations.length(); i++) {
                         JSONObject c = locations.getJSONObject(i);
 
-                        // Storing each json item in a variable.
+                        // Store each JSON item in a variable.
                         Double latitude = c.getDouble(TAG_LATITUDE);
                         Double longitude = c.getDouble(TAG_LONGITUDE);
                         String name = c.getString(TAG_NAME);
                         String description = c.getString((TAG_DESCRIPTION));
 
-                        // adding HashList to ArrayList
                         locationsList.add(new SellerLocation(name, description, latitude, longitude));
                     }
                 } else {
-                    // no locations found
+                    // No locations found.
                     //TODO Launch search activity
                     Intent i = new Intent(getApplicationContext(), MapsActivity.class);
-                    // Closing all previous activities
+                    // Closing all previous activities.
                     i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
                     startActivity(i);
                 }
@@ -124,13 +122,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             return null;
         }
 
-        /**
-         * After completing background task Dismiss the progress dialog
-         * **/
         protected void onPostExecute(String file_url) {
-            // Dismissing the dialog after getting all locations.
+            // Dismiss the dialog after getting all locations.
             progressDialog.dismiss();
-            // Updating UI from background thread.
+            // Update UI from background thread.
             runOnUiThread(new Runnable() {
                 public void run() {
                     // Add markers to the map and move the camera.

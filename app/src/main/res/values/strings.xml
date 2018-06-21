@@ -1,4 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Customer</string>
     <string name="title_activity_maps">Map</string>
+    <string name="lookingForSellers">Looking for sellers nearby...</string>
 </resources>
