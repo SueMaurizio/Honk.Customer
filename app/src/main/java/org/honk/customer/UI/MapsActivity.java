@@ -1,4 +1,4 @@
-package org.honk.customer;
+package org.honk.customer.UI;
 
 import android.app.ProgressDialog;
 import android.content.Intent;
@@ -13,11 +13,14 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import org.honk.customer.JSONParser;
+import org.honk.customer.R;
 import org.honk.customer.domain.SellerLocation;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
@@ -31,22 +34,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private static final String TAG_NAME = "name";
     private static final String TAG_DESCRIPTION = "description";
 
-    private ProgressDialog progressDialog;
-
-    ArrayList<SellerLocation> locationsList;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
 
         // Loading nearby locations from the remote server.
-        new LoadLocations().execute();
+        new LoadLocations(this).execute();
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        /* TODO a click on a placeholder should open google maps to get directions. */
     }
 
     /**
@@ -63,7 +64,19 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         this.googleMap = googleMap;
     }
 
-    public class LoadLocations extends AsyncTask<String, String, String> {
+    public static class LoadLocations extends AsyncTask<String, String, String> {
+
+        /* A weak reference object does not prevent their referents from being made finalizable, finalized, and then reclaimed.
+         * In this case, this avoids memory leaks. */
+        private WeakReference<MapsActivity> mapsActivity;
+
+        private static ProgressDialog progressDialog;
+
+        ArrayList<SellerLocation> locationsList;
+
+        LoadLocations(MapsActivity parentActivity) {
+            mapsActivity = new WeakReference<MapsActivity>(parentActivity);
+        }
 
         /**
          * Before starting background threads, show a progress dialog.
@@ -71,7 +84,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-            progressDialog = new ProgressDialog(MapsActivity.this);
+            progressDialog = new ProgressDialog(mapsActivity.get());
             progressDialog.setMessage("");
             progressDialog.setIndeterminate(false);
             progressDialog.setCancelable(false);
@@ -89,9 +102,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
             try {
                 // Check for SUCCESS TAG.
-                int success = json.getInt(TAG_SUCCESS);
-
-                if (success == 1) {
+                if (json.getInt(TAG_SUCCESS) == 1) {
                     // Get the array of locations.
                     JSONArray locations = json.getJSONArray(TAG_LOCATIONS);
 
@@ -107,13 +118,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                         locationsList.add(new SellerLocation(name, description, latitude, longitude));
                     }
+
+                    // TODO Show a welcome toast with basic directions
                 } else {
                     // No locations found.
-                    //TODO Launch search activity
-                    Intent i = new Intent(getApplicationContext(), MapsActivity.class);
-                    // Closing all previous activities.
-                    i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                    startActivity(i);
+                    // TODO Show hint toast
                 }
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -125,14 +134,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         protected void onPostExecute(String file_url) {
             // Dismiss the dialog after getting all locations.
             progressDialog.dismiss();
+
             // Update UI from background thread.
-            runOnUiThread(new Runnable() {
+            mapsActivity.get().runOnUiThread(new Runnable() {
                 public void run() {
                     // Add markers to the map and move the camera.
-                    if (googleMap != null) {
+                    if (mapsActivity.get().googleMap != null) {
                         if (locationsList != null) {
                             for(SellerLocation sellerLocation : locationsList) {
-                                googleMap.addMarker(new MarkerOptions()
+                                mapsActivity.get().googleMap.addMarker(new MarkerOptions()
                                         .position(sellerLocation.location)
                                         .title(sellerLocation.seller.name)
                                         .snippet(sellerLocation.seller.description));
@@ -140,9 +150,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         }
                     }
 
+                    // TODO Get actual location
                     LatLng userLocation = new LatLng(45.9711883,12.1673287);
-                    float maxZoomLevel = googleMap.getMaxZoomLevel();
-                    googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(15f, maxZoomLevel)));
+                    float maxZoomLevel = mapsActivity.get().googleMap.getMaxZoomLevel();
+                    mapsActivity.get().googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(15f, maxZoomLevel)));
                 }
             });
         }
