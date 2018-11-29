@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.os.AsyncTask;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -16,6 +17,8 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import org.honk.customer.JSONParser;
 import org.honk.customer.R;
 import org.honk.customer.domain.SellerLocation;
+import org.honk.sharedlibrary.LocationHelper;
+import org.honk.sharedlibrary.UI.RequirementsCheckerActivity;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -23,7 +26,7 @@ import org.json.JSONObject;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MapsActivity extends RequirementsCheckerActivity implements OnMapReadyCallback {
 
     private GoogleMap googleMap;
 
@@ -39,6 +42,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
 
+        // Before loading the map, check the requirements for location detection.
+        this.checkRequirementsAndPermissions();
+
+        /* Failure to check requirements or permissions causes the activity to close, so if we reach this line,
+         * we can proceed. */
         // Loading nearby locations from the remote server.
         new LoadLocations(this).execute();
 
@@ -53,8 +61,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     /**
      * Manipulates the map once available.
      * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera. In this case,
-     * we just add a marker near Sydney, Australia.
+     * This is where we can add markers or lines, add listeners or move the camera.
      * If Google Play services is not installed on the device, the user will be prompted to install
      * it inside the SupportMapFragment. This method will only be triggered once the user has
      * installed Google Play services and returned to the app.
@@ -62,6 +69,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onMapReady(GoogleMap googleMap) {
         this.googleMap = googleMap;
+    }
+
+    @Override
+    protected void handlePermissionDeniedMessageClick() {
+        this.finishAffinity();
     }
 
     public static class LoadLocations extends AsyncTask<String, String, String> {
@@ -150,10 +162,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         }
                     }
 
-                    // TODO Get actual location
-                    LatLng userLocation = new LatLng(45.9711883,12.1673287);
-                    float maxZoomLevel = mapsActivity.get().googleMap.getMaxZoomLevel();
-                    mapsActivity.get().googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(15f, maxZoomLevel)));
+                    // TODO User's location must be more accurate than this.
+                    // Get the user's location.
+                    new LocationHelper().getCurrentLocation(mapsActivity.get(), (location) -> {
+                        // Got last known location. In some rare situations this can be null.
+                        if (location != null) {
+                            LatLng userLocation = new LatLng(location.getLatitude(),location.getLongitude());
+                            float maxZoomLevel = mapsActivity.get().googleMap.getMaxZoomLevel();
+                            mapsActivity.get().googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(15f, maxZoomLevel)));
+                        }
+                    });
                 }
             });
         }
