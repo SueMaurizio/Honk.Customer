@@ -1,17 +1,15 @@
 package org.honk.customer.UI;
 
-import android.app.ProgressDialog;
-import android.content.Intent;
 import android.os.AsyncTask;
-import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
-import android.support.v7.app.AppCompatActivity;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 import org.honk.customer.JSONParser;
@@ -26,7 +24,7 @@ import org.json.JSONObject;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
-public class MapsActivity extends RequirementsCheckerActivity implements OnMapReadyCallback {
+public class MapsActivity extends RequirementsCheckerActivity implements OnMapReadyCallback, GoogleMap.OnCameraIdleListener {
 
     private GoogleMap googleMap;
 
@@ -36,6 +34,8 @@ public class MapsActivity extends RequirementsCheckerActivity implements OnMapRe
     private static final String TAG_LONGITUDE = "longitude";
     private static final String TAG_NAME = "name";
     private static final String TAG_DESCRIPTION = "description";
+
+    ArrayList<Marker> markers = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,15 +47,31 @@ public class MapsActivity extends RequirementsCheckerActivity implements OnMapRe
 
         /* Failure to check requirements or permissions causes the activity to close, so if we reach this line,
          * we can proceed. */
-        // Loading nearby locations from the remote server.
-        new LoadLocations(this).execute();
+
+        // TODO User's location must be more accurate than this.
+        // Get the user's location and set up the map.
+        new LocationHelper().getCurrentLocation(this, (location) -> {
+            // Got last known location. In some rare situations this can be null.
+            if (location != null) {
+                LatLng userLocation = new LatLng(location.getLatitude(),location.getLongitude());
+                float maxZoomLevel = this.googleMap.getMaxZoomLevel();
+                this.googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(15f, maxZoomLevel)));
+
+                // Set min and max zoom level: we don't want to load data for an area that is too large.
+                this.googleMap.setMinZoomPreference(12);
+
+                // The map is set: add a listener to detect camera movements.
+                this.googleMap.setOnCameraIdleListener(this);
+            }
+        });
 
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        /* TODO a click on a placeholder should open google maps to get directions. */
+        // TODO A link in a placeholder should open google maps to get directions.
+        // TODO Tapping on a placeholder should open a detail popup that stays open.
     }
 
     /**
@@ -76,41 +92,32 @@ public class MapsActivity extends RequirementsCheckerActivity implements OnMapRe
         this.finishAffinity();
     }
 
+    @Override
+    public void onCameraIdle() {
+        LatLngBounds bounds = this.googleMap.getProjection().getVisibleRegion().latLngBounds;
+        // TODO Fetch data included within the northeast and southwest boundaries.
+        // Loading nearby locations from the remote server.
+        new LoadLocations(this).execute();
+    }
+
     public static class LoadLocations extends AsyncTask<String, String, String> {
 
         /* A weak reference object does not prevent their referents from being made finalizable, finalized, and then reclaimed.
          * In this case, this avoids memory leaks. */
         private WeakReference<MapsActivity> mapsActivity;
 
-        private static ProgressDialog progressDialog;
-
         ArrayList<SellerLocation> locationsList;
 
         LoadLocations(MapsActivity parentActivity) {
-            mapsActivity = new WeakReference<MapsActivity>(parentActivity);
+            mapsActivity = new WeakReference<>(parentActivity);
         }
 
-        /**
-         * Before starting background threads, show a progress dialog.
-         * */
-        @Override
-        protected void onPreExecute() {
-            super.onPreExecute();
-            progressDialog = new ProgressDialog(mapsActivity.get());
-            progressDialog.setMessage("");
-            progressDialog.setIndeterminate(false);
-            progressDialog.setCancelable(false);
-            progressDialog.show();
-        }
-
-        /**
-         * Gets all locations from URL.
-         * */
+        /* Gets all locations from URL. */
         protected String doInBackground(String... args) {
 
             JSONObject json = JSONParser.makeHttpRequest("https://beced59b-6416-4446-af12-5e35670f307a.mock.pstmn.io/GetNearbyLocations");
 
-            locationsList = new ArrayList<SellerLocation>();
+            locationsList = new ArrayList<>();
 
             try {
                 // Check for SUCCESS TAG.
@@ -144,34 +151,27 @@ public class MapsActivity extends RequirementsCheckerActivity implements OnMapRe
         }
 
         protected void onPostExecute(String file_url) {
-            // Dismiss the dialog after getting all locations.
-            progressDialog.dismiss();
-
             // Update UI from background thread.
             mapsActivity.get().runOnUiThread(new Runnable() {
                 public void run() {
-                    // Add markers to the map and move the camera.
                     if (mapsActivity.get().googleMap != null) {
+                        // Remove all the markers from the map.
+                        for (Marker marker : mapsActivity.get().markers) {
+                            marker.remove();
+                        }
+
+                        mapsActivity.get().markers.clear();
+
+                        // Add new markers to the map.
                         if (locationsList != null) {
                             for(SellerLocation sellerLocation : locationsList) {
-                                mapsActivity.get().googleMap.addMarker(new MarkerOptions()
+                                mapsActivity.get().markers.add(mapsActivity.get().googleMap.addMarker(new MarkerOptions()
                                         .position(sellerLocation.location)
                                         .title(sellerLocation.seller.name)
-                                        .snippet(sellerLocation.seller.description));
+                                        .snippet(sellerLocation.seller.description)));
                             }
                         }
                     }
-
-                    // TODO User's location must be more accurate than this.
-                    // Get the user's location.
-                    new LocationHelper().getCurrentLocation(mapsActivity.get(), (location) -> {
-                        // Got last known location. In some rare situations this can be null.
-                        if (location != null) {
-                            LatLng userLocation = new LatLng(location.getLatitude(),location.getLongitude());
-                            float maxZoomLevel = mapsActivity.get().googleMap.getMaxZoomLevel();
-                            mapsActivity.get().googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(15f, maxZoomLevel)));
-                        }
-                    });
                 }
             });
         }
