@@ -1,5 +1,6 @@
 package org.honk.customer.UI;
 
+import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
 
@@ -24,7 +25,7 @@ import org.json.JSONObject;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 
-public class MapsActivity extends RequirementsCheckerActivity implements OnMapReadyCallback, GoogleMap.OnCameraIdleListener {
+public class MapsActivity extends RequirementsCheckerActivity {
 
     private GoogleMap googleMap;
 
@@ -43,61 +44,52 @@ public class MapsActivity extends RequirementsCheckerActivity implements OnMapRe
         setContentView(R.layout.activity_maps);
 
         // Before loading the map, check the requirements for location detection.
-        this.checkRequirementsAndPermissions();
+        this.checkRequirementsAndPermissions("android.permission.ACCESS_FINE_LOCATION", PackageManager.FEATURE_LOCATION_GPS);
 
         /* Failure to check requirements or permissions causes the activity to close, so if we reach this line,
          * we can proceed. */
 
-        // TODO User's location must be more accurate than this.
-        // Get the user's location and set up the map.
-        new LocationHelper().getCurrentLocation(this, (location) -> {
-            // Got last known location. In some rare situations this can be null.
-            if (location != null) {
-                LatLng userLocation = new LatLng(location.getLatitude(),location.getLongitude());
-                float maxZoomLevel = this.googleMap.getMaxZoomLevel();
-                this.googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(15f, maxZoomLevel)));
-
-                // Set min and max zoom level: we don't want to load data for an area that is too large.
-                this.googleMap.setMinZoomPreference(12);
-
-                // The map is set: add a listener to detect camera movements.
-                this.googleMap.setOnCameraIdleListener(this);
-            }
-        });
-
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
-        mapFragment.getMapAsync(this);
+        mapFragment.getMapAsync((googleMap) -> {
+            /* This callback is triggered when the map is ready to be used.
+             * This is where we can add markers or lines, add listeners or move the camera.
+             * If Google Play services is not installed on the device, the user will be prompted to install
+             * it inside the SupportMapFragment. This method will only be triggered once the user has
+             * installed Google Play services and returned to the app. */
+
+            this.googleMap = googleMap;
+
+            // Get the user's location and set up the map.
+            new LocationHelper().getCurrentLocation(this, (location) -> {
+
+                // Got last known location. In some rare situations this can be null.
+                if (location != null) {
+                    LatLng userLocation = new LatLng(location.getLatitude(),location.getLongitude());
+                    float maxZoomLevel = this.googleMap.getMaxZoomLevel();
+                    this.googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(14f, maxZoomLevel)));
+
+                    // The map is set: add a listener to detect camera movements.
+                    this.googleMap.setOnCameraIdleListener(() -> {
+                        LatLngBounds bounds = this.googleMap.getProjection().getVisibleRegion().latLngBounds;
+                        // TODO Fetch data included within the northeast and southwest boundaries.
+                        // Loading nearby locations from the remote server.
+                        new LoadLocations(this).execute();
+                    });
+                }
+            });
+
+            // Set min and max zoom level: we don't want to load data for an area that is too large.
+            this.googleMap.setMinZoomPreference(12);
+        });
 
         // TODO A link in a placeholder should open google maps to get directions.
-        // TODO Tapping on a placeholder should open a detail popup that stays open.
-    }
-
-    /**
-     * Manipulates the map once available.
-     * This callback is triggered when the map is ready to be used.
-     * This is where we can add markers or lines, add listeners or move the camera.
-     * If Google Play services is not installed on the device, the user will be prompted to install
-     * it inside the SupportMapFragment. This method will only be triggered once the user has
-     * installed Google Play services and returned to the app.
-     */
-    @Override
-    public void onMapReady(GoogleMap googleMap) {
-        this.googleMap = googleMap;
     }
 
     @Override
     protected void handlePermissionDeniedMessageClick() {
         this.finishAffinity();
-    }
-
-    @Override
-    public void onCameraIdle() {
-        LatLngBounds bounds = this.googleMap.getProjection().getVisibleRegion().latLngBounds;
-        // TODO Fetch data included within the northeast and southwest boundaries.
-        // Loading nearby locations from the remote server.
-        new LoadLocations(this).execute();
     }
 
     public static class LoadLocations extends AsyncTask<String, String, String> {
@@ -156,11 +148,33 @@ public class MapsActivity extends RequirementsCheckerActivity implements OnMapRe
                 public void run() {
                     if (mapsActivity.get().googleMap != null) {
                         // Remove all the markers from the map.
+                        ArrayList<Marker> markersToBeRemoved = new ArrayList<>();
                         for (Marker marker : mapsActivity.get().markers) {
-                            marker.remove();
+                            /* If the popup of this marker is currently shown, the marker must not be
+                             * removed, otherwise the popup will be closed. */
+                            if (marker.isInfoWindowShown()) {
+                                /* Get the corresponding location returned by the web service, if any, and
+                                 * remove it. */
+                                SellerLocation correspondingLocation = null;
+                                for(SellerLocation sellerLocation : locationsList) {
+                                    if (sellerLocation.seller.name == marker.getTitle()) {
+                                        correspondingLocation = sellerLocation;
+                                        break;
+                                    }
+                                }
+
+                                if (correspondingLocation != null) {
+                                    locationsList.remove(correspondingLocation);
+                                }
+                            } else {
+                                marker.remove();
+                                markersToBeRemoved.add(marker);
+                            }
                         }
 
-                        mapsActivity.get().markers.clear();
+                        for (Marker marker : markersToBeRemoved) {
+                            mapsActivity.get().markers.remove(marker);
+                        }
 
                         // Add new markers to the map.
                         if (locationsList != null) {
