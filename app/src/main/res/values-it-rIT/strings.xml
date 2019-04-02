@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Customer</string>
-    <string name="lookingForSellers">Sto cercando venditori nei paraggi…</string>
     <string name="title_activity_maps">Mappa</string>
     <string name="hello">Ciao</string>
     <string name="intro">Questa app ti permetterà di trovare persone che svolgono attività itineranti nella tua zona.\nHai voglia di un gelato o di un fritto misto? Consulta la mappa e scopri cosa c\'è nei dintorni.</string>
     <string name="ok">OK</string>
+    <string name="noLocationsFound">Spiacente, sembra che non ci siano venditori nelle vicinanze. Prova ad espandere la mappa per trovarne altri.</string>
 </resources>

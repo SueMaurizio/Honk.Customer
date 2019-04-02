@@ -2,8 +2,8 @@
 <resources>
     <string name="app_name">Honk Customer</string>
     <string name="title_activity_maps">Map</string>
-    <string name="lookingForSellers">Looking for sellers nearby…</string>
     <string name="hello">Hello</string>
     <string name="intro">This app will allow you to find travelling workers in your surroundings.\nWould you like an ice cream or french fries? Check out the map and discover what\'s happening around you.</string>
     <string name="ok">OK</string>
+    <string name="noLocationsFound">Sorry, looks like there are no sellers nearby. Try expanding your map to find more.</string>
 </resources>

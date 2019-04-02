@@ -3,6 +3,9 @@ package org.honk.customer.UI;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
+import android.util.Log;
+import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -29,7 +32,6 @@ public class MapsActivity extends RequirementsCheckerActivity {
 
     private GoogleMap googleMap;
 
-    private static final String TAG_SUCCESS = "success";
     private static final String TAG_LOCATIONS = "locations";
     private static final String TAG_LATITUDE = "latitude";
     private static final String TAG_LONGITUDE = "longitude";
@@ -37,6 +39,17 @@ public class MapsActivity extends RequirementsCheckerActivity {
     private static final String TAG_DESCRIPTION = "description";
 
     ArrayList<Marker> markers = new ArrayList<>();
+	
+	LatLngBounds bounds = null;
+
+    public Handler refreshHandler;
+
+    private Runnable locationUpdater = new Runnable() {
+        @Override
+        public void run() {
+            updateCurrentLocationOnMap();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,29 +75,36 @@ public class MapsActivity extends RequirementsCheckerActivity {
             this.googleMap = googleMap;
 
             // Get the user's location and set up the map.
-            new LocationHelper().getCurrentLocation(this, (location) -> {
+            this.refreshHandler = new Handler();
+            this.locationUpdater.run();
 
-                // Got last known location. In some rare situations this can be null.
-                if (location != null) {
-                    LatLng userLocation = new LatLng(location.getLatitude(),location.getLongitude());
-                    float maxZoomLevel = this.googleMap.getMaxZoomLevel();
-                    this.googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(14f, maxZoomLevel)));
-
-                    // The map is set: add a listener to detect camera movements.
-                    this.googleMap.setOnCameraIdleListener(() -> {
-                        LatLngBounds bounds = this.googleMap.getProjection().getVisibleRegion().latLngBounds;
-                        // TODO Fetch data included within the northeast and southwest boundaries.
-                        // Loading nearby locations from the remote server.
-                        new LoadLocations(this).execute();
-                    });
-                }
-            });
+            // The map is set: add a listener to detect camera movements.
+            /*this.googleMap.setOnCameraIdleListener(() -> {
+                this.bounds = this.googleMap.getProjection().getVisibleRegion().latLngBounds;
+                // Loading nearby locations from the remote server.
+                new LoadLocations(this).execute();
+            });*/
 
             // Set min and max zoom level: we don't want to load data for an area that is too large.
             this.googleMap.setMinZoomPreference(12);
         });
 
         // TODO A link in a placeholder should open google maps to get directions.
+    }
+
+    private void updateCurrentLocationOnMap() {
+        new LocationHelper().getCurrentLocation(this, (location) -> {
+            // Got last known location. In some rare situations this can be null.
+            if (location != null) {
+                LatLng userLocation = new LatLng(location.getLatitude(), location.getLongitude());
+                this.googleMap.animateCamera(CameraUpdateFactory.newLatLngZoom(userLocation, Math.min(14f, this.googleMap.getMaxZoomLevel())));
+
+                this.bounds = this.googleMap.getProjection().getVisibleRegion().latLngBounds;
+
+                // Loading nearby locations from the remote server.
+                new LoadLocations(this).execute();
+            }
+        });
     }
 
     @Override
@@ -104,19 +124,25 @@ public class MapsActivity extends RequirementsCheckerActivity {
             mapsActivity = new WeakReference<>(parentActivity);
         }
 
-        /* Gets all locations from URL. */
+        // Gets all locations from URL.
         protected String doInBackground(String... args) {
 
-            JSONObject json = JSONParser.makeHttpRequest("https://beced59b-6416-4446-af12-5e35670f307a.mock.pstmn.io/GetNearbyLocations");
+            JSONObject json = JSONParser.makeHttpRequest(
+				"http://192.168.0.22/HonkServices/api/Location?northEastLatitude=" +
+				mapsActivity.get().bounds.northeast.latitude +
+                "&northEastLongitude=" +
+                mapsActivity.get().bounds.northeast.longitude +
+                "&southWestLatitude=" +
+                mapsActivity.get().bounds.southwest.latitude +
+                "&southWestLongitude=" +
+                mapsActivity.get().bounds.southwest.longitude);
 
             locationsList = new ArrayList<>();
 
             try {
-                // Check for SUCCESS TAG.
-                if (json.getInt(TAG_SUCCESS) == 1) {
-                    // Get the array of locations.
-                    JSONArray locations = json.getJSONArray(TAG_LOCATIONS);
-
+                // Get the array of locations.
+                JSONArray locations = json.getJSONArray(TAG_LOCATIONS);
+                if (locations.length() > 0) {
                     // Loop through all locations.
                     for (int i = 0; i < locations.length(); i++) {
                         JSONObject c = locations.getJSONObject(i);
@@ -131,9 +157,6 @@ public class MapsActivity extends RequirementsCheckerActivity {
                     }
 
                     // TODO Show a welcome toast with basic directions
-                } else {
-                    // No locations found.
-                    // TODO Show hint toast
                 }
             } catch (JSONException e) {
                 e.printStackTrace();
@@ -184,8 +207,15 @@ public class MapsActivity extends RequirementsCheckerActivity {
                                         .title(sellerLocation.seller.name)
                                         .snippet(sellerLocation.seller.description)));
                             }
+
+                            if (locationsList.size() == 0) {
+                                // TODO Critical: only show the toast on first attempt.
+                                Toast.makeText(mapsActivity.get().getApplicationContext(), mapsActivity.get().getString(R.string.noLocationsFound), Toast.LENGTH_LONG).show();
+                            }
                         }
                     }
+
+                    mapsActivity.get().refreshHandler.postDelayed(mapsActivity.get().locationUpdater, 10000);
                 }
             });
         }
