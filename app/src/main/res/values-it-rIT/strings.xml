@@ -5,4 +5,5 @@
     <string name="intro">Questa app ti permetterà di trovare persone che svolgono attività itineranti nella tua zona.\nHai voglia di un gelato o di un fritto misto? Consulta la mappa e scopri cosa c\'è nei dintorni.</string>
     <string name="ok">OK</string>
     <string name="noLocationsFound">Spiacente, sembra che non ci siano venditori nelle vicinanze. Prova ad espandere la mappa per trovarne altri.</string>
+    <string name="locationsFound">Ho trovato venditori nelle vicinanze: tocca i segnaposto sulla mappa per saperne di più.</string>
 </resources>

@@ -44,6 +44,8 @@ public class MapsActivity extends RequirementsCheckerActivity {
 
     public Handler refreshHandler;
 
+    private Boolean firstCallMade = false;
+
     private Runnable locationUpdater = new Runnable() {
         @Override
         public void run() {
@@ -78,13 +80,6 @@ public class MapsActivity extends RequirementsCheckerActivity {
             this.refreshHandler = new Handler();
             this.locationUpdater.run();
 
-            // The map is set: add a listener to detect camera movements.
-            /*this.googleMap.setOnCameraIdleListener(() -> {
-                this.bounds = this.googleMap.getProjection().getVisibleRegion().latLngBounds;
-                // Loading nearby locations from the remote server.
-                new LoadLocations(this).execute();
-            });*/
-
             // Set min and max zoom level: we don't want to load data for an area that is too large.
             this.googleMap.setMinZoomPreference(12);
         });
@@ -102,7 +97,13 @@ public class MapsActivity extends RequirementsCheckerActivity {
                 this.bounds = this.googleMap.getProjection().getVisibleRegion().latLngBounds;
 
                 // Loading nearby locations from the remote server.
-                new LoadLocations(this).execute();
+                // Looks like the LoadLocations instance cannot be reused: it must be re-created each time.
+                if (this.firstCallMade) {
+                    new LoadLocations(this).execute(false);
+                } else {
+                    this.firstCallMade = true;
+                    new LoadLocations(this).execute(true);
+                }
             }
         });
     }
@@ -112,7 +113,7 @@ public class MapsActivity extends RequirementsCheckerActivity {
         this.finishAffinity();
     }
 
-    public static class LoadLocations extends AsyncTask<String, String, String> {
+    public static class LoadLocations extends AsyncTask<Boolean, Void, Boolean> {
 
         /* A weak reference object does not prevent their referents from being made finalizable, finalized, and then reclaimed.
          * In this case, this avoids memory leaks. */
@@ -125,21 +126,21 @@ public class MapsActivity extends RequirementsCheckerActivity {
         }
 
         // Gets all locations from URL.
-        protected String doInBackground(String... args) {
-
-            JSONObject json = JSONParser.makeHttpRequest(
-				"http://192.168.0.22/HonkServices/api/Location?northEastLatitude=" +
-				mapsActivity.get().bounds.northeast.latitude +
-                "&northEastLongitude=" +
-                mapsActivity.get().bounds.northeast.longitude +
-                "&southWestLatitude=" +
-                mapsActivity.get().bounds.southwest.latitude +
-                "&southWestLongitude=" +
-                mapsActivity.get().bounds.southwest.longitude);
-
-            locationsList = new ArrayList<>();
+        protected Boolean doInBackground(Boolean... firstCall) {
 
             try {
+                JSONObject json = JSONParser.makeHttpRequest(
+                    "http://192.168.0.22/HonkServices/api/Location?northEastLatitude=" +
+                    mapsActivity.get().bounds.northeast.latitude +
+                    "&northEastLongitude=" +
+                    mapsActivity.get().bounds.northeast.longitude +
+                    "&southWestLatitude=" +
+                    mapsActivity.get().bounds.southwest.latitude +
+                    "&southWestLongitude=" +
+                    mapsActivity.get().bounds.southwest.longitude);
+
+                locationsList = new ArrayList<>();
+
                 // Get the array of locations.
                 JSONArray locations = json.getJSONArray(TAG_LOCATIONS);
                 if (locations.length() > 0) {
@@ -155,17 +156,15 @@ public class MapsActivity extends RequirementsCheckerActivity {
 
                         locationsList.add(new SellerLocation(name, description, latitude, longitude));
                     }
-
-                    // TODO Show a welcome toast with basic directions
                 }
-            } catch (JSONException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             }
 
-            return null;
+            return firstCall[0];
         }
 
-        protected void onPostExecute(String file_url) {
+        protected void onPostExecute(Boolean firstCall) {
             // Update UI from background thread.
             mapsActivity.get().runOnUiThread(new Runnable() {
                 public void run() {
@@ -208,13 +207,18 @@ public class MapsActivity extends RequirementsCheckerActivity {
                                         .snippet(sellerLocation.seller.description)));
                             }
 
-                            if (locationsList.size() == 0) {
-                                // TODO Critical: only show the toast on first attempt.
-                                Toast.makeText(mapsActivity.get().getApplicationContext(), mapsActivity.get().getString(R.string.noLocationsFound), Toast.LENGTH_LONG).show();
+                            // Only show the toast on first attempt.
+                            if (firstCall) {
+                                if (locationsList.size() == 0) {
+                                    Toast.makeText(mapsActivity.get().getApplicationContext(), mapsActivity.get().getString(R.string.noLocationsFound), Toast.LENGTH_LONG).show();
+                                } else {
+                                    Toast.makeText(mapsActivity.get().getApplicationContext(), mapsActivity.get().getString(R.string.locationsFound), Toast.LENGTH_LONG).show();
+                                }
                             }
                         }
                     }
 
+                    // Set up a new map update in 10 seconds.
                     mapsActivity.get().refreshHandler.postDelayed(mapsActivity.get().locationUpdater, 10000);
                 }
             });

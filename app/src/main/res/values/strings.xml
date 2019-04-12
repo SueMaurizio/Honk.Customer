@@ -6,4 +6,5 @@
     <string name="intro">This app will allow you to find travelling workers in your surroundings.\nWould you like an ice cream or french fries? Check out the map and discover what\'s happening around you.</string>
     <string name="ok">OK</string>
     <string name="noLocationsFound">Sorry, looks like there are no sellers nearby. Try expanding your map to find more.</string>
+    <string name="locationsFound">Looks like there are sellers nearby: tap on the markers to know more.</string>
 </resources>
